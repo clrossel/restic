@@ -1,6 +1,6 @@
 module github.com/restic/restic
 
-go 1.24.0
+go 1.25.7
 
 // keep the old behavior for reparse points on windows until handling reparse points has been improved in restic
 // https://forum.restic.net/t/windows-junction-backup-with-go1-23-or-later/8940
@@ -20,6 +20,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/kalbasit/fastcdc v0.0.0-20260405003008-68da981c1ab7
 	github.com/klauspost/compress v1.18.3
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/ncw/swift/v2 v2.0.5

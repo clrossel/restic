@@ -919,8 +919,16 @@ func (r *Repository) Init(ctx context.Context, version uint, password string, ch
 	if err != nil {
 		return err
 	}
-	if chunkerPolynomial != nil {
-		cfg.ChunkerPolynomial = *chunkerPolynomial
+
+	switch cfg.ChunkerAlgorithm {
+	case restic.ChunkerAlgorithmRabin:
+		if chunkerPolynomial != nil {
+			cfg.ChunkerPolynomial = *chunkerPolynomial
+		}
+	case restic.ChunkerAlgorithmFastCDC:
+		if chunkerPolynomial != nil {
+			return errors.New("cannot set chunker polynomial for repositories using FastCDC")
+		}
 	}
 
 	return r.init(ctx, password, cfg)

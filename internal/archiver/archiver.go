@@ -845,8 +845,9 @@ func (arch *Archiver) loadParentTree(ctx context.Context, sn *data.Snapshot) dat
 func (arch *Archiver) runWorkers(ctx context.Context, wg *errgroup.Group, uploader restic.BlobSaverAsync) {
 	arch.fileSaver = newFileSaver(ctx, wg,
 		uploader,
-		arch.Repo.Config().ChunkerPolynomial,
-		arch.Options.ReadConcurrency)
+		arch.Repo.Config(),
+		arch.Options.ReadConcurrency,
+	)
 	arch.fileSaver.CompleteBlob = arch.CompleteBlob
 	arch.fileSaver.NodeFromFileInfo = arch.nodeFromFileInfo
 

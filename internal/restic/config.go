@@ -14,21 +14,33 @@ import (
 
 // Config contains the configuration for a repository.
 type Config struct {
-	Version           uint        `json:"version"`
-	ID                string      `json:"id"`
-	ChunkerPolynomial chunker.Pol `json:"chunker_polynomial"`
+	Version           uint             `json:"version"`
+	ID                string           `json:"id"`
+	ChunkerPolynomial chunker.Pol      `json:"chunker_polynomial,omitempty"`
+	ChunkerAlgorithm  ChunkerAlgorithm `json:"chunker_algorithm,omitempty"`
 }
 
 const MinRepoVersion = 1
-const MaxRepoVersion = 2
+const MaxRepoVersion = 3
 
 // StableRepoVersion is the version that is written to the config when a repository
 // is newly created with Init().
-const StableRepoVersion = 2
+const StableRepoVersion = MaxRepoVersion
 
 // JSONUnpackedLoader loads unpacked JSON.
 type JSONUnpackedLoader interface {
 	LoadJSONUnpacked(context.Context, FileType, ID, interface{}) error
+}
+
+func defaultChunkerAlgorithmForVersion(version uint) ChunkerAlgorithm {
+	switch {
+	case version <= 2:
+		return ChunkerAlgorithmRabin
+	case version == 3:
+		return ChunkerAlgorithmFastCDC
+	default:
+		return ChunkerAlgorithmUnsupported
+	}
 }
 
 // CreateConfig creates a config file with a randomly selected polynomial and
@@ -39,9 +51,15 @@ func CreateConfig(version uint) (Config, error) {
 		cfg Config
 	)
 
-	cfg.ChunkerPolynomial, err = chunker.RandomPolynomial()
-	if err != nil {
-		return Config{}, errors.Wrap(err, "chunker.RandomPolynomial")
+	algorithm := defaultChunkerAlgorithmForVersion(version)
+
+	if algorithm == ChunkerAlgorithmUnsupported {
+		return Config{}, errors.New("unsupported chunker algorithm")
+	} else if algorithm == ChunkerAlgorithmRabin {
+		cfg.ChunkerPolynomial, err = chunker.RandomPolynomial()
+		if err != nil {
+			return Config{}, errors.Wrap(err, "chunker.RandomPolynomial")
+		}
 	}
 
 	cfg.ID = NewRandomID().String()
@@ -78,10 +96,22 @@ func LoadConfig(ctx context.Context, r LoaderUnpacked) (Config, error) {
 		return Config{}, errors.Errorf("unsupported repository version %v", cfg.Version)
 	}
 
-	if checkPolynomial {
-		if !cfg.ChunkerPolynomial.Irreducible() {
+	algorithm := defaultChunkerAlgorithmForVersion(cfg.Version)
+
+	// Backfill algorithm for old repos that won't have new field
+	if cfg.ChunkerAlgorithm == "" {
+		cfg.ChunkerAlgorithm = algorithm
+	}
+
+	switch algorithm {
+	case ChunkerAlgorithmRabin:
+		if checkPolynomial && !cfg.ChunkerPolynomial.Irreducible() {
 			return Config{}, errors.New("invalid chunker polynomial")
 		}
+	case ChunkerAlgorithmFastCDC:
+		// no polynomial validation
+	default:
+		return Config{}, errors.New("unsupported chunker algorithm")
 	}
 
 	return cfg, nil

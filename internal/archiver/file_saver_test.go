@@ -11,6 +11,7 @@ import (
 	"github.com/restic/chunker"
 	"github.com/restic/restic/internal/data"
 	"github.com/restic/restic/internal/fs"
+	"github.com/restic/restic/internal/restic"
 	"github.com/restic/restic/internal/test"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,7 +41,16 @@ func startFileSaver(ctx context.Context, t testing.TB, _ fs.FS) (*fileSaver, *mo
 	}
 
 	saver := &mockSaver{saved: make(map[string]int)}
-	s := newFileSaver(ctx, wg, saver, pol, workers)
+
+	config := restic.Config{
+		Version:           2, // Run test using rolling Rabin hash
+		ID:                "1",
+		ChunkerPolynomial: pol,
+		ChunkerAlgorithm:  restic.ChunkerAlgorithmRabin,
+	}
+
+	s := newFileSaver(ctx, wg, saver, config, workers)
+
 	s.NodeFromFileInfo = func(snPath, filename string, meta ToNoder, ignoreXattrListError bool) (*data.Node, error) {
 		return meta.ToNode(ignoreXattrListError, t.Logf)
 	}

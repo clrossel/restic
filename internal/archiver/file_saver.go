@@ -20,7 +20,7 @@ type fileSaver struct {
 	saveFilePool *bufferPool
 	uploader     restic.BlobSaverAsync
 
-	pol chunker.Pol
+	config restic.Config
 
 	ch chan<- saveFileJob
 
@@ -31,14 +31,14 @@ type fileSaver struct {
 
 // newFileSaver returns a new file saver. A worker pool with fileWorkers is
 // started, it is stopped when ctx is cancelled.
-func newFileSaver(ctx context.Context, wg *errgroup.Group, uploader restic.BlobSaverAsync, pol chunker.Pol, fileWorkers uint) *fileSaver {
+func newFileSaver(ctx context.Context, wg *errgroup.Group, uploader restic.BlobSaverAsync, config restic.Config, fileWorkers uint) *fileSaver {
 	ch := make(chan saveFileJob)
 	debug.Log("new file saver with %v file workers", fileWorkers)
 
 	s := &fileSaver{
 		uploader:     uploader,
 		saveFilePool: newBufferPool(chunker.MaxSize),
-		pol:          pol,
+		config:       config,
 		ch:           ch,
 
 		CompleteBlob: func(uint64) {},
@@ -101,7 +101,7 @@ type saveFileJob struct {
 }
 
 // saveFile stores the file f in the repo, then closes it.
-func (s *fileSaver) saveFile(ctx context.Context, chnker *chunker.Chunker, snPath string, target string, f fs.File, start func(), finishReading func(), finish func(res futureNodeResult)) {
+func (s *fileSaver) saveFile(ctx context.Context, chnker restic.Chunker, snPath string, target string, f fs.File, start func(), finishReading func(), finish func(res futureNodeResult)) {
 	start()
 
 	fnr := futureNodeResult{
@@ -162,7 +162,7 @@ func (s *fileSaver) saveFile(ctx context.Context, chnker *chunker.Chunker, snPat
 	}
 
 	// reuse the chunker
-	chnker.Reset(f, s.pol)
+	chnker.Reset(f, s.config)
 
 	node.Content = []restic.ID{}
 	node.Size = 0
@@ -245,7 +245,11 @@ func (s *fileSaver) saveFile(ctx context.Context, chnker *chunker.Chunker, snPat
 
 func (s *fileSaver) worker(ctx context.Context, jobs <-chan saveFileJob) {
 	// a worker has one chunker which is reused for each file (because it contains a rather large buffer)
-	chnker := chunker.New(nil, s.pol)
+	chnker, e := restic.NewChunker(nil, s.config)
+
+	if e != nil {
+		panic(e)
+	}
 
 	for {
 		var job saveFileJob
